@@ -1,0 +1,141 @@
+
+#include <Servo.h>
+
+Servo myservo;
+int pos = 0;
+int trigPin = 11;
+int echoPin = 12;
+
+int delayMs = 5;
+int searchAngle = 180;
+int skipAngle = 1;
+int play = 1;
+int enterAngle = 10;
+int visibleRange = 15;
+int startAngle = 0;
+int navAngle = 0;
+
+int a = 0, b = 0, c = 0, d = 0;
+boolean rising = false;
+
+void setup() {
+  Serial.begin(9600);
+  myservo.attach(8);
+  pinMode(echoPin, INPUT);
+  pinMode(trigPin, OUTPUT);
+  pinMode(7, OUTPUT);
+  digitalWrite(trigPin, LOW);
+  delayMicroseconds(5);
+  myservo.write(90);
+}
+
+void loop() {
+  digitalWrite(7, HIGH);
+  if (blink()) {
+    String s = Serial.readString();
+    if (s != "") {
+      searchAngle = split(s, ';', 0).toInt();
+      skipAngle = split(s, ';', 1).toInt();
+      delayMs = split(s, ';', 2).toInt();
+      play = split(s, ';', 3).toInt();
+    }
+    if (play == 1) {
+      digitalWrite(7, LOW);
+      for (pos = 90; pos >= 0; pos -= skipAngle * 2) {
+        myservo.write(pos);
+        delay(delayMs);
+      }
+      for (pos = 0; pos <= searchAngle; pos += skipAngle) {
+        myservo.write(pos);
+        scan();
+        delay(delayMs);
+      }
+      for (pos = searchAngle; pos >= 90; pos -= skipAngle * 2) {
+        myservo.write(pos);
+        delay(delayMs);
+      }
+      if (d - c < b - a) {
+        c = a;
+        d = b;
+      }
+      navAngle = (c + d) / 2;
+      a = 0;
+      b = 0;
+      c = 0;
+      d = 0;
+      Serial.print(";s:");
+
+      delay(1000);
+      myservo.write(navAngle);
+      digitalWrite(7, HIGH);
+      delay(1000);
+    }
+  }
+}
+
+void scan() {
+  long distance, duration;
+  digitalWrite(trigPin, LOW);
+  delayMicroseconds(2);
+  digitalWrite(trigPin, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(trigPin, LOW);
+  duration = pulseIn(echoPin, HIGH);
+  distance = duration / (2 * 29.1);
+
+  if (distance >= visibleRange) {
+    if (rising) {
+      //B
+      b = pos;
+    } else {
+      //A
+      a = pos;
+      rising = true;
+    }
+  } else {
+    //if d-c < b-a ; c=a d=b
+    b = pos;
+    if (d - c < b - a) {
+      c = a;
+      d = b;
+    }
+    rising = false;
+  }
+
+  String s = ";";
+  s = s + pos;
+  s = s + ":";
+  s = s + (distance);
+  Serial.print(s);
+}
+
+String split(String data, char separator, int index) {
+  int found = 0;
+  int strIndex[] = {0, -1};
+  int maxIndex = data.length() - 1;
+
+  for (int i = 0; i <= maxIndex && found <= index; i++) {
+    if (data.charAt(i) == separator || i == maxIndex) {
+      found++;
+      strIndex[0] = strIndex[1] + 1;
+      strIndex[1] = (i == maxIndex) ? i + 1 : i;
+    }
+  }
+  return found > index ? data.substring(strIndex[0], strIndex[1]) : "";
+}
+
+boolean blink() {
+  for (int i = 0; i <= 2; i++) {
+    long duration;
+    digitalWrite(trigPin, LOW);
+    delayMicroseconds(2);
+    digitalWrite(trigPin, HIGH);
+    delayMicroseconds(10);
+    digitalWrite(trigPin, LOW);
+    duration = pulseIn(echoPin, HIGH);
+    if ((duration / (2 * 29.1))<visibleRange) {
+      return true;
+    }
+  }
+  return false;
+}

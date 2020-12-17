@@ -1,0 +1,195 @@
+
+#include <Servo.h>
+
+Servo myservo;
+int pos = 0;
+int trigPin = 12;
+int echoPin = 13;
+int headPin = 9;
+int mR = 5, in1 = 3, in2 = 4;
+int mL = 6, in3 = 7, in4 = 8;
+
+int delayMs = 3;
+int searchAngle = 180;
+int skipAngle = 1;
+int play = 1;
+int enterAngle = 10;
+int visibleRange = 25;
+int startAngle = 0;
+int navAngle = 0;
+
+int a = 0, b = 0, c = 0, d = 0;
+boolean rising = false;
+
+void setup() {
+  Serial.begin(9600);
+  myservo.attach(headPin);
+  pinMode(echoPin, INPUT);
+  pinMode(trigPin, OUTPUT);
+  pinMode(7, OUTPUT);
+  digitalWrite(trigPin, LOW);
+  delayMicroseconds(5);
+  myservo.write(90);
+}
+
+void loop() {
+  String s = Serial.readString();
+  Serial.println(s);
+
+  if (s != "") {
+
+  }
+  analogWrite(mR, 50);
+  analogWrite(mL, 50);
+  digitalWrite(in1, HIGH);
+  digitalWrite(in2, LOW);
+  digitalWrite(in3, HIGH);
+  digitalWrite(in4, LOW);
+  if (blink()) {
+    if (play == 1) {
+      digitalWrite(7, LOW);
+      for (pos = 90; pos >= 0; pos -= skipAngle * 2) {
+        myservo.write(pos);
+        delay(delayMs);
+      }
+      delay(50);
+      for (pos = 0; pos <= searchAngle; pos += skipAngle) {
+        myservo.write(pos);
+        scan();
+        delay(delayMs);
+      }
+      delay(50);
+      for (pos = searchAngle; pos >= 90; pos -= skipAngle * 2) {
+        myservo.write(pos);
+        delay(delayMs);
+      }
+      if (d - c < b - a) {
+        c = a;
+        d = b;
+      }
+      navAngle = (c + d) / 2;
+      a = 0;
+      b = 0;
+      c = 0;
+      d = 0;
+      //Serial.print(";s:");
+
+      delay(1000);
+      turn(navAngle);
+      digitalWrite(7, HIGH);
+      delay(1000);
+    }
+  } else {
+    analogWrite(mR, 200);
+    analogWrite(mL, 200);
+    digitalWrite(in1, HIGH);
+    digitalWrite(in2, LOW);
+    digitalWrite(in3, HIGH);
+    digitalWrite(in4, LOW);
+  }
+}
+
+void turn(int angle) {
+  //myservo.write(angle);
+  if (angle >= 90) {
+    turnLeft(angle - 90);
+  } else {
+    turnRight(90 - angle);
+  }
+}
+
+void turnLeft(int factor) {
+  Serial.println("Left");
+  analogWrite(mR, 200);
+  digitalWrite(in1, HIGH);
+  digitalWrite(in2, LOW);
+  delay(3 * factor);
+  digitalWrite(in1, LOW);
+  digitalWrite(in2, LOW);
+}
+
+void turnRight(int factor) {
+  Serial.println("Right");
+  analogWrite(mL, 200);
+  digitalWrite(in3, HIGH);
+  digitalWrite(in4, LOW);
+  delay(3 * factor);
+  digitalWrite(in3, LOW);
+  digitalWrite(in4, LOW);
+}
+
+void scan() {
+  long distance, duration;
+  digitalWrite(trigPin, LOW);
+  delayMicroseconds(2);
+  digitalWrite(trigPin, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(trigPin, LOW);
+  duration = pulseIn(echoPin, HIGH);
+  distance = duration / (2 * 29.1);
+
+  if (distance >= visibleRange) {
+    if (rising) {
+      //B
+      b = pos;
+    } else {
+      //A
+      a = pos;
+      rising = true;
+    }
+  } else {
+    //if d-c < b-a ; c=a d=b
+    b = pos;
+
+    if (abs(d - c) < abs(b - a)) {
+      Serial.print(a);
+      Serial.print("-");
+      Serial.print(b);
+      Serial.println("");
+      c = a;
+      d = b;
+      a = pos;
+    }
+    rising = false;
+  }
+}
+
+String split(String data, char separator, int index) {
+  int found = 0;
+  int strIndex[] = {0, -1};
+  int maxIndex = data.length() - 1;
+
+  for (int i = 0; i <= maxIndex && found <= index; i++) {
+    if (data.charAt(i) == separator || i == maxIndex) {
+      found++;
+      strIndex[0] = strIndex[1] + 1;
+      strIndex[1] = (i == maxIndex) ? i + 1 : i;
+    }
+  }
+  return found > index ? data.substring(strIndex[0], strIndex[1]) : "";
+}
+
+boolean blink() {
+  long duration;
+  digitalWrite(trigPin, LOW);
+  delayMicroseconds(2);
+  digitalWrite(trigPin, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(trigPin, LOW);
+  duration = pulseIn(echoPin, HIGH);
+  if ((duration / (2 * 29.1)) < visibleRange) {
+    return true;
+  }
+
+  digitalWrite(10, LOW);
+  delayMicroseconds(2);
+  digitalWrite(10, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(10, LOW);
+  duration = pulseIn(11, HIGH);
+  if ((duration / (2 * 29.1)) >= 7) {
+    return true;
+  }
+
+  return false;
+}

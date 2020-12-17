@@ -1,0 +1,202 @@
+#include <Servo.h>
+Servo servo;
+//M1
+int enA = 5;
+int in1 = 3;
+int in2  = 4;
+//M2
+int enB = 6;
+int in3 = 7;
+int in4 = 8;
+//sencer 1
+int triPin1 = 10;
+int echoPin1  = 11;
+
+//sencer 2
+int triPin2 = 12;
+int echoPin2 = 13;
+
+long duration, depth, cm, cm1;
+
+void setup() {
+  Serial.begin(9600);
+  servo.attach(9);
+  servo.write(90);
+  delay(300);
+  pinMode(enA, OUTPUT);
+  pinMode(enB, OUTPUT);
+  pinMode(in1, OUTPUT);
+  pinMode(in2, OUTPUT);
+  pinMode(in3, OUTPUT);
+  pinMode(in4, OUTPUT);
+
+  pinMode(triPin1, OUTPUT);
+  pinMode(echoPin1, INPUT);
+
+  pinMode(triPin2, OUTPUT);
+  pinMode(echoPin2, INPUT);
+
+  digitalWrite(triPin2, LOW);
+  delayMicroseconds(5);
+  digitalWrite(triPin1, LOW);
+  delayMicroseconds(5);
+}
+void mpower(int motor, int rotation, int spd) {
+  int pwm;
+  int pA;
+  int pB;
+  if (motor == 1) {
+    pwm = enA;
+    pA = in1;
+    pB = in2;
+  } else if (motor == 2) {
+    pwm = enB;
+    pA = in3;
+    pB = in4;
+  } else {
+    return;
+  }
+  if (rotation == 0) {
+    digitalWrite(pA, LOW);
+    digitalWrite(pB, LOW);
+  } else   if (rotation == 1) {
+    digitalWrite(pA, HIGH);
+    digitalWrite(pB, LOW);
+
+  } else   if (rotation == -1) {
+    digitalWrite(pA, LOW);
+    digitalWrite(pB, HIGH);
+
+
+  }
+  analogWrite(pwm, spd);
+}
+int speedval = 0;//speed of car. max 40
+int maxspeed = 40;
+
+int normalspeed  = 120;//less than 125(255/2)
+
+int min_dis = 15;
+int min_Dep  = 7;
+
+int mode = 0;
+//0-run;
+//1-scan
+//2-rotate
+
+int f_max = 0;
+int f_max_ang = 0;
+
+void loop() {
+  cm = getDistance();
+  cm1 = getDepth();
+  if (mode == 0) {
+    if (cm > min_dis || cm == 0 ) {
+      if (cm1 <= min_Dep) {
+        speedval++;
+        if (speedval > maxspeed) {
+          speedval = maxspeed;
+        }
+
+        mpower(1, 1, normalspeed);
+        mpower(2, 1, normalspeed);
+        delay(100);
+      }
+      else {
+        mpower(1, -1, normalspeed * 2);
+        mpower(2, -1, normalspeed * 2);
+
+        delay(speedval * 4);
+        speedval = 0;
+        if (cm > 1 || speedval == 5 && cm1 >= min_Dep) {
+          mode = 1;
+        }
+      }
+    }else {
+        mpower(1, -1, normalspeed * 2);
+        mpower(2, -1, normalspeed * 2);
+
+        delay(speedval * 4);
+        speedval = 0;
+        if (cm > 1 || speedval == 5 && cm1 >= min_Dep) {
+          mode = 1;
+        }
+      }
+    Serial.print("CM-");
+    Serial.print(cm);
+    Serial.print(",Speed-");
+    Serial.print(speedval);
+    Serial.print(",Mode-");
+    Serial.print(mode);
+    Serial.print(",Depth-");
+    Serial.print(cm1);
+    Serial.println();
+  } else if (mode == 1) {
+    f_max = 0;
+    servo.write(0);
+    delay(200);
+
+    for (int a = 0; a <= 180; a += 10) {
+      servo.write(a);
+      delay(20);
+      cm = getDistance();
+      if (a <= 60 && a >= 120) {
+        if (cm > f_max) {
+          f_max = cm;
+          f_max_ang = a;
+        }
+        Serial.print("A=");
+        Serial.print(a);
+        Serial.print(",D=");
+        Serial.println(cm);
+      }
+    }
+    servo.write(90);
+    delay(200);
+    Serial.print("MAX:");
+    Serial.println(f_max);
+    mode = 2;
+  } else if (mode == 2) {
+    Serial.println("Reverse...");
+    mpower(1, -1, normalspeed * 2);
+    mpower(2, -1, normalspeed * 2);
+    delay(100);
+    boolean rotateing = true;
+
+    // while (rotateing) {
+    if (f_max_ang < 90) {
+      Serial.println("Rotating LEFT");
+      mpower(1, -1, normalspeed * 2);
+      mpower(2, 1, normalspeed * 2);
+      delay((90 - f_max_ang) * 2);
+    } else {
+      Serial.println("Rotating RIGHT");
+      mpower(1, 1, normalspeed * 2);
+      mpower(2, -1, normalspeed * 2);
+      delay((f_max_ang - 90) * 2);
+    }
+    mpower(1, 0, 0);
+    mpower(2, 0, 0);
+
+    mode = 0;
+
+    // }
+    mpower(1, 0, 0);
+    mpower(2, 0, 0);
+  }
+
+}
+long getDistance() {
+  digitalWrite(triPin1, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(triPin1, LOW);
+  duration = pulseIn(echoPin1, HIGH, 100000);
+  return duration / (2 * 29.1);
+}
+long getDepth() {
+  digitalWrite(triPin2, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(triPin2, LOW);
+  depth = pulseIn(echoPin2, HIGH, 100000);
+  return depth / (2 * 29.1);
+}
